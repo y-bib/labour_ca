@@ -1,0 +1,41 @@
+---
+title: "Untitled"
+format: pdf
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+set.seed(123)  # For reproducibility
+data <- data.frame(values = rnorm(1000, mean = 50, sd = 10))
+
+# Create a ggplot histogram
+library(tidyverse)
+ggplot(data, aes(x = values)) +
+  geom_histogram(binwidth = 5, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Demo Histogram of Normally Distributed Data",
+       x = "Values",
+       y = "Frequency") +
+  theme_minimal()
+```
+
+```{python}
+a = [1, 2, 3]
+print(a[0])
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
