@@ -1,5 +1,5 @@
 ---
-title: "Labor Market Analysis part 1"
+title: "Labor Market Analysis"
 author: "y_bib"
 format:
   pdf:
@@ -23,9 +23,7 @@ editor: visual
 
 -   Examine differences between women and men, immigrants and non-immigrants in terms of overtime work, part-time employment, and unemployment rates.
 
-```         
-## 
-```
+# Summary of results
 
 ```{r}
 #| message: false
@@ -45,13 +43,13 @@ library(dbscan) # for clustering
 library(tidyr)
 library(pivottabler) # for pivot tables
 library(gt) # tables
-library(umap) #clustering
+
 
 #reading date from Stat Ca
 labor<-read.table(file='data/pub0325.txt',header=TRUE,sep="\t",stringsAsFactors = TRUE)
 
 
-names(Input_data) <- tolower(names(labor))
+names(labor) <- tolower(names(labor))
 
 #indicating columns as factors
 names<-as.vector(colnames(labor),mode="character")
@@ -61,11 +59,13 @@ names_factor<-setdiff(names,c("rec_num","finalwt","paidot","unpaidot",
 
 labor[names_factor] <- lapply(labor[names_factor], as.factor)
 
-labor$IMMIG<-revalue(labor$IMMIG, c("1" = "Immigrant,not more 10y", "2" = "Immigrant,more 10y", "3"="Non-immigrant"))
+labor$immig<-revalue(labor$immig, c("1" = "Immig,not more 10y", "2" = "Immig,more 10y", "3"="Non-immigrant"))
 labor$gender <- revalue(labor$gender, c("1" = "Male", "2" = "Female"))
-labor$ftpmain<-revalue(labor$ftpmain,c("1"="Full-time","2"="Part-time"))
+labor$ftptmain<-revalue(labor$ftptmain,c("1"="Full-time","2"="Part-time"))
+labor$lfsstat<-revalue(labor$lfsstat,c("1"="Employed, at work",'2'="Employed, absent from work","3"="Unemployed","4"="Not in labour force"))
 
-AGE_12_labels <- c(
+
+age_12_labels <- c(
   "1" = "15 to 19",
   "2" = "20 to 24",
   "3" = "25 to 29",
@@ -80,8 +80,8 @@ AGE_12_labels <- c(
   "12" = "70+"
 )
 
-# Reasons for part time. WHYPT field
-WHYPT_labels <- c(
+# Reasons for part time. whypt field
+whypt_labels <- c(
   "0" = "Other reasons",
   "1" = "Own illness or disability",
   "2" = "Caring for children",
@@ -94,27 +94,36 @@ WHYPT_labels <- c(
 
 ```
 
+# Descriptive Statistics
+
 ## Wages depending on gender
 
-Mean wages vs gender
+Mean and median of hourly rate vs gender
 
 ```{r}
 #| echo: false
 #| message: false
 #| warning: false
+
+
+tapply(0.01*labor$hrlyearn, labor$gender , mean, na.rm = TRUE)
+
+tapply(0.01*labor$hrlyearn, labor$gender , mean, na.rm = TRUE)
+
+```
+
+Mean and median wages vs gender
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
 
 #hour rate* usual hours=income  vs gender
 
 tapply(0.01*labor$hrlyearn*labor$utothrs, labor$gender , mean, na.rm = TRUE)
-boxplot(hrlyearn ~ gender ,data=labor, ylim=c(0,15000))
-```
-
-Median wages vs gender
-
-```{r}
-#| echo: false
-#| message: false
-#| warning: false
+#boxplot(hrlyearn ~ gender ,data=labor, ylim=c(0,15000))
 
 #hour rate* usual hours=income  vs gender
 
@@ -149,6 +158,18 @@ latex_table <- function(data, title = "Table", annotation= NULL) {
   cat(latex_code)
 }
 
+```
+
+### Means for extra hours depending on gender
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| results: 'asis'
+
+
+
 #---------------------------------------------------------
 
 #means for extra hours depending on gender
@@ -164,9 +185,47 @@ rownames(summary_labor) <- NULL
 
 latex_table(summary_labor, "Mean of extra hours by gender")
 
+```
+
+### Full-time and part-time workers for each gender
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| results: asis
+
 #full-time vs part-time for each gender
 
-tab <- table(labor$gender, labor$ftpmain)
+
+
+tab <- table(labor$gender, labor$ftptmain)
+
+# Convert to data frame keeping wide structure
+summary_labor <- as.data.frame.matrix(tab)
+
+# Optionally add row names as a proper column
+summary_labor <- cbind(gender = rownames(summary_labor), summary_labor)
+rownames(summary_labor) <- NULL
+
+
+latex_table(summary_labor, "Full-time anf part-time workers by gender")
+
+```
+
+
+### Reasons for part-time work by gender
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| results: 'asis'
+
+
+#full-time vs part-time for each gender
+
+tab <- table(labor$gender, labor$ftptmain)
 
 # Convert to data frame keeping wide structure
 summary_labor <- as.data.frame.matrix(tab)
@@ -181,11 +240,11 @@ latex_table(summary_labor, "Full-time anf part-time workers by gender")
 # reasons for part-time vs gender
 
 
-tab<-xtabs(~ WHYPT+gender, data=labor )
+tab<-xtabs(~ whypt+gender, data=labor )
 
 summary_labor <- as.data.frame.matrix(tab)
 
-summary_labor$Reason <- WHYPT_labels  # 
+summary_labor$Reason <- whypt_labels  # 
 
 
 latex_table(summary_labor, "Reasons for part-time work by gender")
@@ -197,7 +256,7 @@ latex_table(summary_labor, "Reasons for part-time work by gender")
 #Conclusion : women stay away from work taking care of the children approx 10x then men
 ```
 
-We nay immediately notice conclusion: women stay away from work taking care of the children approx 10x then men
+<!-- We nay immediately notice conclusion: women stay away from work taking care of the children approx 10x then men -->
 
 ```{r}
 #| eval: false
@@ -217,18 +276,129 @@ We nay immediately notice conclusion: women stay away from work taking care of t
 
 ```
 
-## Wages depend on age and gender
+# Unemployment
 
-It is clear that family matter affects the hours and wages of female workers. Let us see how wages depend on the age and gender.
+### Unemployment vs gender (non-weighted and weighted)
 
-### Unemployment vs gender
 ```{r}
+#| echo: false
+#| warning: false
+#| results: asis
 
-source("script.R")
+########################################################
+#absolute numbers of male and female workers 
+
+tab<-xtabs(~lfsstat + gender , data=labor)
+
+summary_labor <- as.data.frame.matrix(tab)
+
+# Add row names as a proper column
+summary_labor <- cbind(Status = rownames(summary_labor), summary_labor)
+rownames(summary_labor) <- NULL
+
+latex_table(summary_labor, "Quantities of male and female workers")
+
+########################################################
+# unemployment rates vs gender 
+tab<-prop.table(tab, margin = 2)
+summary_labor <- as.data.frame.matrix(tab)
+
+# Add row names as a proper column
+summary_labor <- cbind(Status = rownames(summary_labor), summary_labor)
+rownames(summary_labor) <- NULL
+
+latex_table(summary_labor,"Nonweighted unemployment rates by gender")
+
+########################################################
+# unemployment rates vs gender among those in labour force
+tab<-prop.table(tab[1:3,], margin = 2)
+
+summary_labor <- as.data.frame.matrix(tab)
+
+# Add row names as a proper column
+summary_labor <- cbind(Status = rownames(summary_labor), summary_labor)
+rownames(summary_labor) <- NULL
+
+latex_table(summary_labor,"Nonweighted unemployment rates by gender")
+
+
+########################################################
+#Weighted unemployed rates
+
+source("bootstrapStatCa.R")
+#print(unemprate_by_prov(final_bs))
+
+# Calculating unemployed rates by province, gender, and immigrant status using  bootstrap
+
+#print(unemprate_by_gender(final_bs))
+unemp_table <- unemprate_by_gender(final_bs)
+unemp_table<-as.data.frame(t(unemp_table))
+unemp_table$var<-rownames(unemp_table)
+unemp_table <- unemp_table[, c("var", setdiff(names(unemp_table), "var"))]
+
+colnames(unemp_table) <- as.character(unlist(unemp_table[1, ]))
+unemp_table <- unemp_table[-1, ]
+
+
+latex_table(unemp_table,"Weighted unemployment rate by gender")
+
 ```
 
+### Unemployment vs immigrant status (non-weighted and weighted)
 
-### Wages vs age (using linear regression and poly approximation)
+```{r}
+#| echo: false
+#| warning: false
+#| results: asis
+
+
+tab<-xtabs(~lfsstat + immig , data=labor)
+#absolute numbers of immigrant and non-immigrant workers 
+
+summary_labor <- as.data.frame.matrix(tab)
+
+# Add row names as a proper column
+summary_labor <- cbind(status = rownames(summary_labor), summary_labor)
+rownames(summary_labor) <- NULL
+
+latex_table(summary_labor,"Quantities of immigrant and non-immigrant workers")
+
+
+# unemployment rates vs immigrant status 
+
+summary_labor <- as.data.frame.matrix(prop.table(tab, margin = 2))
+
+# Add row names as a proper column
+summary_labor <- cbind(status = rownames(summary_labor), summary_labor)
+rownames(summary_labor) <- NULL
+
+latex_table(summary_labor,"Nonweighted unemployment rates by immigrant status")
+
+
+
+
+# Calculating unemployed rates by immigrant status using  bootstrap
+
+#print(unemprate_by_immig(final_bs))
+unemp_table <- unemprate_by_immig(final_bs)
+#unemp_table <- cbind(status = rownames(unemp_table), unemp_table)
+
+unemp_table<-as.data.frame(t(unemp_table))
+unemp_table$var<-rownames(unemp_table)
+unemp_table <- unemp_table[, c("var", setdiff(names(unemp_table), "var"))]
+
+colnames(unemp_table) <- as.character(unlist(unemp_table[1, ]))
+unemp_table <- unemp_table[-1, ]
+latex_table(unemp_table,"Unemployment Rate by Immigrant Status")
+
+
+```
+
+# Wages and Demographics
+
+Family matter affects the hours and wages of female workers. Let us see how wages depend on age and gender.
+
+## Wages vs age (using linear regression and poly approximation)
 
 First we check how wages depend on age of workers of both genders.
 
@@ -236,28 +406,27 @@ First we check how wages depend on age of workers of both genders.
 #| echo: false
 #| message: false
 #| warning: false
-#| include: true
 
-#tapply(labor$hrlyearn, labor$AGE_12 , mean, na.rm = TRUE)
-tmp <- tapply(labor$hrlyearn, labor$AGE_12, mean, na.rm = TRUE)
+#tapply(labor$hrlyearn, labor$age_12 , mean, na.rm = TRUE)
+tmp <- tapply(labor$hrlyearn, labor$age_12, mean, na.rm = TRUE)
 
-#with(labor, tapply(0.01 * hrlyearn * utothrs, AGE_12, mean, na.rm = TRUE))
+#with(labor, tapply(0.01 * hrlyearn * utothrs, age_12, mean, na.rm = TRUE))
 
-# Create data frame; AGE_12 numeric for modeling, AGE_GROUP factor for labels
+# Create data frame; age_12 numeric for modeling, age_group factor for labels
 df <- data.frame(
-  AGE_12 = as.numeric(names(tmp)),        # numeric age codes (1,2,3...)
+  age_12 = as.numeric(names(tmp)),        # numeric age codes (1,2,3...)
   salary = as.numeric(tmp)
 )
-df$AGE_GROUP <- factor(df$AGE_12, levels = as.numeric(names(AGE_12_labels)), labels = AGE_12_labels)
+df$age_group <- factor(df$age_12, levels = as.numeric(names(age_12_labels)), labels = age_12_labels)
 
-# Fit polynomial regression on numeric AGE_12
-model <- lm(salary ~ poly(AGE_12, 2), data = na.omit(df))
+# Fit polynomial regression on numeric age_12
+model <- lm(salary ~ poly(age_12, 2), data = na.omit(df))
 df$pred <- predict(model)
 
-ggplot(df, aes(x = AGE_GROUP, y = salary, color = "black")) +
+ggplot(df, aes(x = age_group, y = salary, color = "black")) +
   geom_point(size = 2, show.legend = FALSE) +    # no legend for points
   geom_line(aes(y = pred, group = 1), color = "blue", size = 0.5) +
-  labs(title = "Wages vs Age", x = "Age Group", y = "Mean Wages") +
+  labs(title = "Wages vs age", x = "age group", y = "Mean Wages") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 15, hjust = 1))
 
@@ -266,44 +435,45 @@ ggplot(df, aes(x = AGE_GROUP, y = salary, color = "black")) +
 ## Wages vs age (using linear and quadratic polynоmial regressions)
 
 ```{r}
-#| eval: false
+#| echo: false
 #| message: false
 #| warning: false
-#| include: true
 
-# LINEAR REGRESSION for SALARY vs AGE (AGE_12 is treated as numeric)
-model <- lm(0.01 * hrlyearn * utothrs ~ as.numeric(AGE_12), data = labor)
+# LINEAR REGRESSION for SALARY vs age (age_12 is treated as numeric)
+model <- lm(0.01 * hrlyearn * utothrs ~ as.numeric(age_12), data = labor)
 #model
 
 # SECOND ORDER POLYNOMIAL REGRESSION
-#lm(formula = 0.01 * hrlyearn * utothrs ~ poly(as.numeric(AGE_12), 2), data = labor)
+#lm(formula = 0.01 * hrlyearn * utothrs ~ poly(as.numeric(age_12), 2), data = labor)
 
 # Scatter plot with linear and polynomial regression lines
 p1 <- labor %>%
-  ggplot(aes(x = as.numeric(AGE_12), y = 0.01 * hrlyearn * utothrs)) +
+  ggplot(aes(x = as.numeric(age_12), y = 0.01 * hrlyearn * utothrs)) +
   geom_point(color = "orange") +
   geom_smooth(method = "lm", se = FALSE, color = "red") +
   geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = FALSE, color = "blue") +
   scale_x_continuous(
-    breaks = 1:length(AGE_12_labels),
-    labels = AGE_12_labels
+    breaks = 1:length(age_12_labels),
+    labels = age_12_labels
   ) +
-  labs(x = "AGE", y = "wages means: actual hours") +
+  labs(x = "age", y = "wages means: actual hours") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 15, hjust = 1))
 
 
-# Boxplot by AGE_12 factor
+# Boxplot by age_12 factor
 p2 <- labor %>%
-  ggplot(aes(x = AGE_12, y = 0.01 * hrlyearn * utothrs)) +
+  ggplot(aes(x = age_12, y = 0.01 * hrlyearn * utothrs)) +
   geom_boxplot(fill = "orange") +
-  scale_x_discrete(labels = AGE_12_labels) +  # <-- show long labels for age
-  labs(x = "AGE", y = "wages means: actual hours") +
+  scale_x_discrete(labels = age_12_labels) +  # <-- show long labels for age
+  labs(x = "age", y = "wages means: actual hours") +
   theme_bw()+  
   theme(axis.text.x = element_text(angle = 15, hjust = 1))
 
 # Display plots side by side
-p1 / p2
+p1 
+
+p2
 
 ```
 
@@ -317,69 +487,65 @@ p1 / p2
 
 # plot shows salary (based on usual hours and usual wages) by gender
 pl1<-labor %>%
-  ggplot(aes(x = AGE_12, y = 0.01 * hrlyearn * utothrs, color = gender)) +
+  ggplot(aes(x = age_12, y = 0.01 * hrlyearn * utothrs, color = gender)) +
   stat_summary(fun = mean, geom = "point", size = 2) +
   stat_summary(fun = mean, geom = "line", aes(group = gender), color="grey", linewidth = 0.3) +
-    scale_x_discrete(labels = AGE_12_labels) +  # <-- show long labels
-  labs(x = "AGE", y = "wages means: usual hours") +
+    scale_x_discrete(labels = age_12_labels) +  # <-- show long labels
+  labs(x = "age", y = "wages means: usual hours") +
   theme_bw()+  
   theme(axis.text.x = element_text(angle = 15, hjust = 1))
 
 ```
 
 ```{r}
-#| eval: false
+#| echo: false
 #| message: false
 #| warning: false
-#| include: true
 
 #hyst plot showing paid plus unpaid extra hours for Females and Males during the week of sampling
 
 
 pl2<-labor %>%
-  ggplot(aes(x = AGE_12, y = 0.01 * hrlyearn *atothrs, color = gender)) +
+  ggplot(aes(x = age_12, y = 0.01 * hrlyearn *atothrs, color = gender)) +
   stat_summary(fun = mean, geom = "point", size = 2) +
   stat_summary(fun = mean, geom = "line", aes(group = gender), color = "grey", linewidth = 0.3) +
-  scale_x_discrete(labels = AGE_12_labels) +  # <-- show long labels for age
-  labs(x = "AGE", y = "wages means: actual hours") +
+  scale_x_discrete(labels = age_12_labels) +  # <-- show long labels for age
+  labs(x = "age", y = "wages means: actual hours") +
   theme_bw()+  
   theme(axis.text.x = element_text(angle = 15, hjust = 1))
-pl1 / pl2
+pl1 
+pl2
 
 
 ```
 
-#Wages vs other factors
-
 ## Wages depend on immigrant status
 
 ```{r}
-#| eval: false
+#| echo: false
 #| message: false
 #| warning: false
-#| include: true
 
 #hour rate* usual hours=income  vs immigrant status
 
-tapply(0.01*labor$hrlyearn*labor$utothrs, labor$IMMIG , mean, na.rm = TRUE)
-tapply(0.01*labor$hrlyearn*labor$utothrs, labor$IMMIG , summary, na.rm = TRUE)
-boxplot(0.01*hrlyearn*utothrs ~ IMMIG ,data=labor)
-boxplot(hrlyearn ~ IMMIG ,data=labor)
-boxplot(utothrs ~ IMMIG ,data=labor)
+tapply(0.01*labor$hrlyearn*labor$utothrs, labor$immig , mean, na.rm = TRUE)
+tapply(0.01*labor$hrlyearn*labor$utothrs, labor$immig , summary, na.rm = TRUE)
+# boxplot(0.01*hrlyearn*utothrs ~ immig ,data=labor)
+# boxplot(hrlyearn ~ immig ,data=labor)
+# boxplot(utothrs ~ immig ,data=labor)
 
-ggplot(data=labor, aes(x=IMMIG,y=0.01*hrlyearn*utothrs))+
+ggplot(data=labor, aes(x=immig,y=0.01*hrlyearn*utothrs))+
   geom_violin(draw_quantiles = c(0.25, 0.5, 0.75))+
   theme_bw() +
-  labs(x="Immigration status",y="Salary")
+  labs(x="immigration status",y="Salary")
 ```
 
 ## Wages vs tenure (using linear regression)
 
 ```{r}
-#| eval: false
+#| echo: false
 #| message: false
 #| warning: false
-#| include: true
 
 #idea: income=hours*rate for different ages, non-linear dependence vs linear regression
 
@@ -395,26 +561,36 @@ geom_point( size = 0.3)+
 
 ```
 
-
-
-# What factors are crutial for wages
+# Model-based analysis: What factors are crucial for wages
 
 ## Wages clustering : using UMAP and K-means
 
 ```{r}
-#| eval: false
+#| echo: false
 #| message: false
 #| warning: false
-#| include: true
+
+library(uwot)
+#library(umap) #clustering
+library(knitr)
+
+
 
 
 tmp.data <- labor[, c("hrlyearn","paidot","unpaidot",
-        "xtrahrs","uhrsmain","ahrsmain",
-        "utothrs","atothrs","hrsaway","tenure","AGE_12")]
+        "xtrahrs", "noc_43", "noc_10","naics_21",
+        "utothrs","atothrs","hrsaway","tenure","age_12")]  #"uhrsmain","ahrsmain",
+
+cols <- c("noc_43", "noc_10", "naics_21", "age_12")
+
+tmp.data[cols] <- lapply(tmp.data[cols], function(x) as.numeric(replace(x, x == "", 0)))
+
 keep_rows <- complete.cases(tmp.data)
-tmp.data$AGE_12 <- as.numeric(tmp.data$AGE_12)
+
+
 tmp.data <- tmp.data[keep_rows, ]
 
+clusters <- kmeans(tmp.data, centers = 3)$cluster
 
 
 umap_result<-umap(as.matrix(tmp.data))
@@ -428,9 +604,19 @@ colnames(umap_df) <- c("UMAP1", "UMAP2")
 combined <- cbind(umap_df, tmp.data)
 
 # Correlations: how much each variable contributes to the axis UMAP1, UMAP2
-cor(combined[, c("UMAP1", "UMAP2")], combined[, -c(1,2)], use = "complete.obs")
 
-clusters <- kmeans(umap_result, centers = 3)$cluster
+cor_matrix <- cor(combined[, c("UMAP1", "UMAP2")],
+                  combined[, -c(1,2)],
+                  use = "complete.obs")
+
+# Convert to data frame and format
+cor_df <- as.data.frame(t(cor_matrix))
+
+# Render nicely
+kable(cor_df, digits = 2, caption = "Correlation of UMAP dimensions with other variables")
+
+
+#clusters <- kmeans(umap_result, centers = 3)$cluster
 
 umap_df$col <- as.factor(clusters)
 
@@ -441,6 +627,8 @@ ggplot(umap_df, aes(x = UMAP1, y = UMAP2, color = col)) +
 
 # Factor column for coloring 
 tmp.labels <- factor(ifelse(0.01 * tmp.data$hrlyearn * tmp.data$utothrs > 10500, "Yes", "No"))
+
+print("Factor: wage based on utothrs > 10500 ")
 #tmp.labels <- labor[1:3000,][keep_rows,"gender"]
 
 umap_df$col <- tmp.labels 
@@ -455,22 +643,24 @@ ggplot(umap_df, aes(x = UMAP1, y = UMAP2, color = col)) +
 
 ```
 
-## Clusterization using DBSCAN
+## Clustering using DBSCAN
 
 ```{r}
-#| eval: false
+#| echo: false
 #| message: false
 #| warning: false
-#| include: false
 
 library(mclust)
 
-
 tmp.data <- labor[, c("hrlyearn","paidot","unpaidot",
-        "xtrahrs","uhrsmain","ahrsmain",
-        "utothrs","atothrs","hrsaway","tenure","AGE_12")]
+        "xtrahrs", "noc_43", "noc_10","naics_21",
+        "utothrs","atothrs","hrsaway","tenure","age_12")]  #"uhrsmain","ahrsmain",
+
+cols <- c("noc_43", "noc_10", "naics_21", "age_12")
+tmp.data[cols] <- lapply(tmp.data[cols], function(x) as.numeric(replace(x, x == "", 0)))
+
 keep_rows<-complete.cases(tmp.data)
-tmp.data$AGE_12<-as.numeric(tmp.data$AGE_12)
+
 tmp.data <- tmp.data[keep_rows, ]
 
 mclust_result <- Mclust(tmp.data)
@@ -501,54 +691,83 @@ ggplot(umap_df, aes(x = UMAP1, y = UMAP2, color = col)) +
 # only one cluster -> statistical conclusion that no meaningful subgrouping was found
 ```
 
-## Multidimensional linear regression
+## Linear regression
+
+Wages are determined by the hourly rate (**hrlyearn**) and the typical number of hours worked (or the actual total hours - fields **utothrs, atothrs paidot, unpaidot**). Both hourly rate and hours worked exhibit a higher correlation with the UMAP embedding coordinates, suggesting they contribute significantly to the underlying variance structure of the dataset.
+
+In the next step we check what factors define the hourly rate (**hrlyearn**) and usual hours (**utothrs**).
+
+### Model on the hourly rate
 
 ```{r}
-#| eval: false
+#| echo: false
 #| message: false
 #| warning: false
-#| include: false
 
 #rows with no NAs
-complete_labor <- labor[complete.cases(labor[,c("utothrs","AGE_12","EDUC", "gender","COWMAIN","MARSTAT","AGYOWNK","NAICS_21","NOC_10","PROV") ]), ]
+complete_labor <- labor[complete.cases(labor[,c("utothrs","age_12","educ", "gender","cowmain","marstat","agyownk","naics_21","noc_10","noc_43","prov") ]), ]
 
 #we consider age a numeric variable
-complete_labor$AGE_12<-as.numeric(complete_labor$AGE_12)
+complete_labor$age_12<-as.numeric(complete_labor$age_12)
 
 #null_model <- lm(hrlyearn ~ 1, data = complete_labor)
 
 #linear regression model  and the summary
-model <- lm(hrlyearn ~ gender+EDUC +COWMAIN+AGYOWNK+AGE_12+NOC_10+PROV , data = complete_labor)
+model <- lm(hrlyearn ~ utothrs+gender+educ +cowmain+agyownk+age_12+noc_10+prov , data = complete_labor)
 
 summary(model)
+```
 
-alt_model <- lm(utothrs ~ gender+EDUC +COWMAIN+AGYOWNK+NAICS_21+PROV , data = complete_labor)
+### Model on usual total working hours
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+
+### Model on utothrs - Usual hours worked per week at all jobs
+## or should it be atothrs - Actual hours worked per week at all jobs
+
+
+
+alt_model <- lm(atothrs ~ gender+educ +cowmain+agyownk+naics_21+prov , data = complete_labor)
 
 summary(alt_model)
 
+#AIC and BIC testing what model is more preferable
+AIC(model)
+BIC(model)
+
+#nested model compare
+anova(model, alt_model)
+
+```
+
+#Chi-Squared and ANOVA Tests Dependence Between Categorical Variables
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
 
 
-#BIC testing what model is more prefferable
 
-# alt_model <- lm(hrlyearn ~ gender+EDUC +COWMAIN+AGYOWNK , data = complete_labor)
-# 
-# summary(alt_model)
-# 
-BIC(model, alt_model)
+
 
 
 #correlation between numeric parameters to see their contribution to the lin model
 
-chisq.test(table(labor$AGE_12, labor$MARSTAT))
-chisq.test(table(labor$AGYOWNK, labor$MARSTAT))
-chisq.test(table(labor$AGYOWNK, labor$AGE_12))
-chisq.test(table(labor$NAICS_21, labor$NOC_10))
+chisq.test(table(labor$age_12, labor$marstat))
+chisq.test(table(labor$agyownk, labor$marstat))
+chisq.test(table(labor$agyownk, labor$age_12))
+chisq.test(table(labor$naics_21, labor$noc_10))
 
-chisq.test(table(labor$NAICS_21, labor$NOC_43))
+chisq.test(table(labor$naics_21, labor$noc_43))
 
 library(DescTools)
 
-EtaSq(aov(hrlyearn ~ PROV+gender, data = labor))  # Strength of association
+EtaSq(aov(hrlyearn ~ prov+gender, data = labor))  # Strength of association
 
 cor(labor$utothrs, labor$hrlyearn, use = "complete.obs")
 
@@ -556,95 +775,7 @@ cor(labor$utothrs, labor$hrlyearn, use = "complete.obs")
 #step_model <- step(null_model, scope = list(lower = null_model, upper = full_model), direction = "both",na.action = na.omit)
 ```
 
-## Part-time workers study
-
-```{r}
-#| eval: false
-#| include: false
-
-#| echo: false
-#| message: false
-#| warning: false
-
-# PART TIME vs gender
-
-# reasons for part-time vs gender
-tab<-xtabs(~ gender + WHYPT, data=labor )
-tab
-#Conclusion : women stay away from work taking care of the chieldren approx 10x then men
-
-```
-
-```{r}
-#| eval: false
-#| include: false
-
-#| echo: false
-#| message: false
-#| warning: false
-
-df_tab <- as.data.frame(tab)
-
-df_tab %>%
- # filter(WHYPT %in% c("2","3","6")) %>%
-  ggplot( aes(x = WHYPT , y=Freq, color=gender)) +
-  geom_point(size=3)+
-  theme(legend.position="top")+
-  labs(x = "Why part-time job", 
-       caption = "0	- Other reasons
-1 -	Own illness or disability
-2	- Caring for children
-3	- Other personal or family responsibilities
-4	- Going to school
-5	- Personal preference
-6	- Business conditions or could not find full-time work, looked for full-time work in last month
-7	- Business conditions or could not find full-time work, did not look for full-time work in last month
-", 
-       y = "Number")+
-  theme_bw() +
-  theme(
-    plot.caption = element_text(hjust = 0, size = 10)
-  )
-```
-
-```{r}
-#| eval: false
-#| include: false
-
-#| echo: false
-#| message: false
-#| warning: false
-
-# gender vs REASONS FOR LEAVING JOB
-tab<-xtabs(~ gender + WHYLEFTN, data=labor )
-tab
-df_tab <- as.data.frame(tab)
-
-df_tab %>%
-  filter(WHYLEFTN %in% c("1","2","3","4","5")) %>%
-  ggplot( aes(x = WHYLEFTN , y=Freq, color=gender)) +
-  geom_point(size=3)+
-  theme(legend.position="top")+
-  labs(x = "Why left job in the last 12 months", 
-       caption="
-02	Job leavers, caring for children
-03	Job leavers, pregnancy
-04	Job leavers, personal or family responsibilities
-05	Job leavers, going to school",
-       y = "Number")+
-theme(
-  plot.caption = element_text(hjust = 0, size = 10)
-)
-
-# Conclusion: there are more males leaving work for school then females 
-#
-# part time going to school males 1664, females 2349
-# left work because of the going to school males 810, females 738
-# possible trend: males less likely work full or part-time during attending school
-#compared to females
-```
-
-# Bootstrap: non-weighted and weighted
+<!-- Bootstrap: non-weighted and weighted -->
 
 ```{r}
 #| eval: false
@@ -673,4 +804,100 @@ ggplot(BootHR.graph, aes(x=0.01*xbar)) +
 # 0.95 confidence interval
 quantile( BootHR$t, probs=c(.025, .975) ) 
 boot.ci(BootHR, type = "perc", conf = 0.95)  
+```
+
+```{r}
+#| eval: false
+#| include: false
+#| echo: false
+#| message: false
+#| warning: false
+
+################################################################################
+#NOT USED
+################################################################################
+
+# Part-time workers study
+
+
+
+# PART TIME vs gender
+
+# reasons for part-time vs gender
+tab<-xtabs(~ gender + whypt, data=labor )
+tab
+#Conclusion : women stay away from work taking care of the children approx 10x then men
+
+```
+
+```{r}
+#| eval: false
+#| include: false
+
+#| echo: false
+#| message: false
+#| warning: false
+
+df_tab <- as.data.frame(tab)
+
+df_tab %>%
+ # filter(whypt %in% c("2","3","6")) %>%
+  ggplot( aes(x = whypt , y=Freq, color=gender)) +
+  geom_point(size=3)+
+  theme(legend.position="top")+
+  labs(x = "Why part-time job", 
+       caption = "0	- Other reasons
+1 -	Own illness or disability
+2	- Caring for children
+3	- Other personal or family responsibilities
+4	- Going to school
+5	- Personal preference
+6	- Business conditions or could not find full-time work, looked for full-time work in last month
+7	- Business conditions or could not find full-time work, did not look for full-time work in last month
+", 
+       y = "Number")+
+  theme_bw() +
+  theme(
+    plot.caption = element_text(hjust = 0, size = 10)
+  )
+```
+
+```{r}
+#| eval: false
+#| include: false
+
+#| echo: false
+#| message: false
+#| warning: false
+
+# gender vs REASONS FOR LEAVING JOB
+tab<-xtabs(~ gender + whyleftn, data=labor )
+tab
+df_tab <- as.data.frame(tab)
+
+df_tab %>%
+  filter(whyleftn %in% c("1","2","3","4","5")) %>%
+  ggplot( aes(x = whyleftn , y=Freq, color=gender)) +
+  geom_point(size=3)+
+  theme_bw()+
+  theme(legend.position="top")+
+  labs(x = "Why left job in the last 12 months", 
+       caption="
+02	Job leavers, caring for children
+03	Job leavers, pregnancy
+04	Job leavers, personal or family responsibilities
+05	Job leavers, going to school",
+       y = "Number")+
+theme(
+  plot.caption = element_text(hjust = 0, size = 10)
+)
+
+# Conclusion: there are more males leaving work for school then females 
+#
+# part time going to school males 1664, females 2349
+# left work because of the going to school males 810, females 738
+# possible trend: males less likely work full or part-time during attending school
+#compared to females
+
+
 ```
