@@ -12,12 +12,12 @@
 #===============================================================================
 
 #	Load required packages
-#library(dplyr)
-#library(tidyr)
+library(dplyr)
+library(tidyr)
 
 #	Set seed and number of replicates here
 seed <- 1234
-reps <- 10  # Number of bootstrap replicates. Use 10 for testing and learning purposes. Use 1000 for production of variance estimates.
+reps <- 1000  # Number of bootstrap replicates. Use 10 for testing and learning purposes. Use 1000 for production of variance estimates.
 
 #	Done in a series of functions, run the example under each one to follow along
 
@@ -46,11 +46,14 @@ prep_data <- function(pumf) {
 }
 
 #	Prepare data
-#Input_data<-read.table(file='data/pub0325.txt',header=TRUE,sep="\t",stringsAsFactors = TRUE)
-names(Input_data) <- tolower(names(labor))
+  # Input_data<-read.table(file='data/pub0325.txt',header=TRUE,sep="\t",stringsAsFactors = TRUE)
+  # names(Input_data) <- tolower(names(Input_data))
 
+Input_data<-labor
+Input_data$age_12<-as.numeric(Input_data$age_12)
 pumf <- prep_data(Input_data)
-
+ 
+  
 #	Function to create poisson factors for one replicate
 sample_poisson_factors <- function(input) {
   sample(c(-1, 1), length(input), replace = TRUE)  # random and independent
@@ -81,6 +84,7 @@ generate_replicates <- function(final_weight, n_reps, seed_value) {
 # Example usage
 uncal_bsw <- generate_replicates(pumf$finalwt, 10, seed)
 
+
 # Function to calibrate each bootstrap replicate to the sums of final weights by domain
 calibrate_weights <- function(uncalibrated_weights, final_weight, domains) {
   
@@ -108,6 +112,7 @@ cal_bsw <- calibrate_weights(
   interaction(pumf$prov, pumf$gender, pumf$age_cal)
 )
 
+
 # Final function that puts it all together
 generate_bootstrap_weights <- function(d, n_reps, seed_value) {
   
@@ -124,15 +129,14 @@ final_bs <- pumf |>
 #############################################################
 # Example of using bootstrap weights to calculate variance
 # Define indicators
-final_bs$employed <- final_bs$lfsstat %in% 1:2
-final_bs$unemployed <- final_bs$lfsstat %in% 3
-
+final_bs$employed <- final_bs$lfsstat %in% c("Employed, at work","Employed, absent from work")
+final_bs$unemployed <- final_bs$lfsstat %in% c("Unemployed")
 
 
 #===============================================================================
 
 #	Add NILF (Not in Labor Force) indicator
-final_bs$nilf <- final_bs$lfsstat %in% 4
+final_bs$nilf <- final_bs$lfsstat %in% c("Not in labour force")
 #===============================================================================
 # Estimates of totals
 #===============================================================================
@@ -276,6 +280,20 @@ unemprate_by_gender <- function(bw_file) {
   
   res
 }
-unemprate_by_prov(final_bs)
-unemprate_by_gender(final_bs)
+#===============================================================================
+# My addition, Unemployment rate by immigrant status using bs_ratio
+#===============================================================================
 
+unemprate_by_immig <- function(bw_file) {
+  res <- bw_file |>
+    dplyr::filter(!nilf) |>  # calculate unemployment rate on those in labour force
+    dplyr::group_by(immig) |>
+    dplyr::summarize(
+      est = bs_ratio(bswt, finalwt, unemployed),
+      .groups = "drop"
+    ) |>
+    tidyr::unpack(cols = est, names_sep = "_")
+  
+  res
+}
+ 
