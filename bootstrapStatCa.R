@@ -1,4 +1,5 @@
 #===============================================================================
+# Updated for labour.ca to be a inner script
 # SAMPLE CODE FOR POISSON BOOTSTRAP ON THE LFS PUMF
 # This program creates a file of 1,000 poisson bootstrap weights for use
 # with the LFS PUMF, as well as shows a couple examples of how to

@@ -1,5 +1,5 @@
 ---
-title: "Labor Market Analysis part 1"
+title: "Labor Market Analysis"
 author: "y_bib"
 format:
   pdf:
