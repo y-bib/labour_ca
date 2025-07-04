@@ -1,2 +1,2 @@
 # labour_ca
-Analysis Statistica CA syrvey data.
+Analysis Statistica CA survey data.
